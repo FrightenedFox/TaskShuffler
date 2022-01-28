@@ -1,3 +1,81 @@
+-- Table: public.subjects
+
+-- DROP TABLE IF EXISTS public.subjects;
+
+CREATE TABLE IF NOT EXISTS public.subjects
+(
+    subject_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    name text COLLATE pg_catalog."default" NOT NULL,
+    folder text COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT subjects_pkey PRIMARY KEY (subject_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.subjects
+    OWNER to postgres;
+-- Index: subjects_uindex
+
+-- DROP INDEX IF EXISTS public.subjects_uindex;
+
+CREATE UNIQUE INDEX IF NOT EXISTS subjects_uindex
+    ON public.subjects USING btree
+    (subject_id ASC NULLS LAST)
+    TABLESPACE pg_default;
+
+
+-- Table: public.topics
+
+-- DROP TABLE IF EXISTS public.topics;
+
+CREATE TABLE IF NOT EXISTS public.topics
+(
+    topic_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    name text COLLATE pg_catalog."default" NOT NULL,
+    folder text COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT topics_pk PRIMARY KEY (topic_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.topics
+    OWNER to postgres;
+-- Index: topics_uindex
+
+-- DROP INDEX IF EXISTS public.topics_uindex;
+
+CREATE UNIQUE INDEX IF NOT EXISTS topics_uindex
+    ON public.topics USING btree
+    (topic_id ASC NULLS LAST, topic_id ASC NULLS LAST)
+    TABLESPACE pg_default;
+
+
+-- Table: public.tasks
+
+-- DROP TABLE IF EXISTS public.tasks;
+
+CREATE TABLE IF NOT EXISTS public.tasks
+(
+    task_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    task_tex text COLLATE pg_catalog."default" NOT NULL,
+    difficulty integer NOT NULL DEFAULT 3,
+    CONSTRAINT tasks_pkey PRIMARY KEY (task_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.tasks
+    OWNER to postgres;
+-- Index: tasks_uindex
+
+-- DROP INDEX IF EXISTS public.tasks_uindex;
+
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_uindex
+    ON public.tasks USING btree
+    (task_id ASC NULLS LAST)
+    TABLESPACE pg_default;
+
+
 -- Table: public.solutions
 
 -- DROP TABLE IF EXISTS public.solutions;
@@ -22,6 +100,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS solutions_uindex
     ON public.solutions USING btree
     (solution_id ASC NULLS LAST)
     TABLESPACE pg_default;
+
 
 -- Table: public.subject_topic
 
@@ -63,32 +142,6 @@ CREATE INDEX IF NOT EXISTS fki_subject_topic_subject_fk
 CREATE INDEX IF NOT EXISTS fki_subject_topic_topic_fk
     ON public.subject_topic USING btree
     (topic_id ASC NULLS LAST)
-    TABLESPACE pg_default;
-
-
--- Table: public.subjects
-
--- DROP TABLE IF EXISTS public.subjects;
-
-CREATE TABLE IF NOT EXISTS public.subjects
-(
-    subject_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
-    name text COLLATE pg_catalog."default" NOT NULL,
-    folder text COLLATE pg_catalog."default" NOT NULL,
-    CONSTRAINT subjects_pkey PRIMARY KEY (subject_id)
-)
-
-TABLESPACE pg_default;
-
-ALTER TABLE IF EXISTS public.subjects
-    OWNER to postgres;
--- Index: subjects_uindex
-
--- DROP INDEX IF EXISTS public.subjects_uindex;
-
-CREATE UNIQUE INDEX IF NOT EXISTS subjects_uindex
-    ON public.subjects USING btree
-    (subject_id ASC NULLS LAST)
     TABLESPACE pg_default;
 
 
@@ -135,32 +188,6 @@ CREATE INDEX IF NOT EXISTS fki_task_solution_task_fk
     TABLESPACE pg_default;
 
 
--- Table: public.tasks
-
--- DROP TABLE IF EXISTS public.tasks;
-
-CREATE TABLE IF NOT EXISTS public.tasks
-(
-    task_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
-    task_tex text COLLATE pg_catalog."default" NOT NULL,
-    difficulty integer NOT NULL DEFAULT 3,
-    CONSTRAINT tasks_pkey PRIMARY KEY (task_id)
-)
-
-TABLESPACE pg_default;
-
-ALTER TABLE IF EXISTS public.tasks
-    OWNER to postgres;
--- Index: tasks_uindex
-
--- DROP INDEX IF EXISTS public.tasks_uindex;
-
-CREATE UNIQUE INDEX IF NOT EXISTS tasks_uindex
-    ON public.tasks USING btree
-    (task_id ASC NULLS LAST)
-    TABLESPACE pg_default;
-
-
 -- Table: public.topic_task
 
 -- DROP TABLE IF EXISTS public.topic_task;
@@ -202,31 +229,3 @@ CREATE INDEX IF NOT EXISTS fki_topic_fk
     ON public.topic_task USING btree
     (topic_id ASC NULLS LAST)
     TABLESPACE pg_default;
-
-
--- Table: public.topics
-
--- DROP TABLE IF EXISTS public.topics;
-
-CREATE TABLE IF NOT EXISTS public.topics
-(
-    topic_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
-    name text COLLATE pg_catalog."default" NOT NULL,
-    folder text COLLATE pg_catalog."default" NOT NULL,
-    CONSTRAINT topics_pk PRIMARY KEY (topic_id)
-)
-
-TABLESPACE pg_default;
-
-ALTER TABLE IF EXISTS public.topics
-    OWNER to postgres;
--- Index: topics_uindex
-
--- DROP INDEX IF EXISTS public.topics_uindex;
-
-CREATE UNIQUE INDEX IF NOT EXISTS topics_uindex
-    ON public.topics USING btree
-    (topic_id ASC NULLS LAST, topic_id ASC NULLS LAST)
-    TABLESPACE pg_default;
-
-
