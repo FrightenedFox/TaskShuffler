@@ -1,17 +1,15 @@
-create table subjects
+create table if not exists subjects
 (
     subject_id integer generated always as identity
-        primary key,
+        constraint subjects_pkey
+            primary key,
     name       text not null
 );
 
-alter table subjects
-    owner to postgres;
-
-create unique index subjects_uindex
+create unique index if not exists subjects_uindex
     on subjects (subject_id);
 
-create table topics
+create table if not exists topics
 (
     topic_id integer generated always as identity
         constraint topics_pk
@@ -20,27 +18,23 @@ create table topics
     folder   text not null
 );
 
-alter table topics
-    owner to postgres;
-
-create unique index topics_uindex
+create unique index if not exists topics_uindex
     on topics (topic_id, topic_id);
 
-create table tasks
+create table if not exists tasks
 (
     task_id    integer generated always as identity
-        primary key,
+        constraint tasks_pkey
+            primary key,
     task_tex   text              not null,
-    difficulty integer default 3 not null
+    difficulty integer default 3 not null,
+    filetype   text              not null
 );
 
-alter table tasks
-    owner to postgres;
-
-create unique index tasks_uindex
+create unique index if not exists tasks_uindex
     on tasks (task_id);
 
-create table subject_topic
+create table if not exists subject_topic
 (
     subject_id integer not null
         constraint subject_topic_subject_fk
@@ -52,16 +46,13 @@ create table subject_topic
         primary key (subject_id, topic_id)
 );
 
-alter table subject_topic
-    owner to postgres;
-
-create index fki_subject_topic_subject_fk
+create index if not exists fki_subject_topic_subject_fk
     on subject_topic (subject_id);
 
-create index fki_subject_topic_topic_fk
+create index if not exists fki_subject_topic_topic_fk
     on subject_topic (topic_id);
 
-create table topic_task
+create table if not exists topic_task
 (
     topic_id integer not null
         constraint topic_fk
@@ -73,11 +64,10 @@ create table topic_task
         primary key (topic_id, task_id)
 );
 
-alter table topic_task
-    owner to postgres;
-
-create index fki_task_fk
+create index if not exists fki_task_fk
     on topic_task (task_id);
 
-create index fki_topic_fk
+create index if not exists fki_topic_fk
     on topic_task (topic_id);
+
+

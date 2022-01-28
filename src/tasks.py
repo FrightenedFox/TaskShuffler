@@ -1,6 +1,7 @@
 import os
 import glob
 import shutil
+from datetime import datetime
 
 import pandas as pd
 
@@ -52,20 +53,23 @@ class Dispatcher:
         self.params = config("tasher")
         self.private_dir = os.path.join(self.params["directory"], ".tasher/")
         self.solutions_dir = os.path.join(self.private_dir, "solutions/")
+        self.solution_prefix = self.params['solution_prefix']
         if not os.path.exists(self.private_dir):
             os.makedirs(self.private_dir)
         if not os.path.exists(self.solutions_dir):
             os.makedirs(self.solutions_dir)
 
     def add_tasks(self, path: str, details_csv: str, sep: str) -> None:
+        path = path.replace("/", "\\")
         # Read all given files
         if os.path.isdir(path):
             if path[-1] not in ["/", "\\"]:
                 path += "/"
-            files_df = pd.DataFrame(columns=["filepath", "filename"])
+            files_df = pd.DataFrame(columns=["filepath", "filename", "filetype"])
             for i, filepath in enumerate(glob.iglob(path + "**/**", recursive=True)):
-                if os.path.splitext(filepath)[1] in SUPPORTED_FILETYPES:
-                    files_df.at[i] = [filepath, os.path.basename(filepath)]
+                filetype = os.path.splitext(filepath)[1]
+                if filetype in SUPPORTED_FILETYPES:
+                    files_df.at[i] = [filepath, os.path.basename(filepath), filetype]
             files_df.drop_duplicates(inplace=True)
             if details_csv is not None:
                 details_df = pd.read_csv(details_csv, sep=sep)
@@ -73,11 +77,15 @@ class Dispatcher:
                                     how="left", validate="one_to_one")
             else:
                 df = self.get_details(files_df.copy())
-        else:
+        elif os.path.splitext(path)[1] in SUPPORTED_FILETYPES:
             df = self.get_details(pd.DataFrame({
                 "filepath": [path],
                 "filename": [os.path.basename(path)],
+                "filetype": [os.path.splitext(path)[1]],
             }))
+        else:
+            raise ValueError(f"Filetype is not supported yet. "
+                             f"Accepted filetypes: {SUPPORTED_FILETYPES}")
 
         # Make sure there is a directory for each topic
         df.loc[:, "topic_path"] = self.solutions_dir + df.topic
@@ -88,9 +96,9 @@ class Dispatcher:
         # Add info to the database and copy files to private folder
         for index, row in df.iterrows():
             task_id = self.db.insert_task(row)
-            sol_extension = os.path.splitext(row.filename)[1]
-            new_solution_path = os.path.join(row.topic_path,
-                                             f"sol_{task_id}{sol_extension}")
+            new_solution_path = os.path.join(
+                row.topic_path,
+                f"{self.solution_prefix}{task_id}{row.filetype}")
             shutil.copy(row.filepath, new_solution_path)
 
     def get_details(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -135,14 +143,48 @@ class Dispatcher:
             df.groupby(group_by).apply(print)
 
     def list_tasks(self, filters: pd.Series,
-                   group_by: str,
-                   pdf_dir: str) -> None:
+                   group_by: str, output_dir: str,
+                   csv_sep: str = ";") -> None:
         df = self.db.get_tasks(filters)
         if group_by == "none":
             print(df)
         else:
             df.groupby(group_by).apply(print)
 
-        # If pdf directory is given generate pdf
-        if pdf_dir is not None:
-            pass
+        # If pdf directory is given generate all files
+        if output_dir is not None and os.path.isdir(output_dir) and df.size > 0:
+            with open(self.params["latex_preamble"]) as preamble,\
+                    open(self.params["latex_preamble"]) as ending\
+                    :
+                pass
+
+            # Create folders
+            results_folder = os.path.join(
+                output_dir,
+                f"{self.params['folder_prefix']}"
+                f"{datetime.now().strftime(' %Y-%m-%d %H-%M-%S')}")
+            solution_folder = os.path.join(
+                results_folder, f"{self.solution_prefix}images")
+            os.makedirs(results_folder)
+            os.makedirs(solution_folder)
+
+            # Copy solutions to the destination folder
+            for index, row in df.iterrows():
+                start_solution_path = os.path.join(
+                    row.topic_path,
+                    f"{self.solution_prefix}{row.task_id}{row.filetype}").replace(
+                    "/", "\\"
+                )
+                destination_solution_path = os.path.join(
+                    solution_folder,
+                    f"{self.solution_prefix}{index + 1}{row.filetype}").replace(
+                    "/", "\\"
+                )
+                shutil.copy(start_solution_path, destination_solution_path)
+
+            csv_path = os.path.join(results_folder, "result.csv")
+            df.to_csv(csv_path, sep=csv_sep,
+                      encoding="UTF-8", index_label="result_index")
+
+        elif output_dir is not None and not os.path.isdir(output_dir):
+            raise ValueError("Given path is not a directory")

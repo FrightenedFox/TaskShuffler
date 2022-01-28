@@ -105,11 +105,13 @@ class TaskShufflerDB:
                                                  "topic_id": topic_id})
 
         # Create task
-        insert_task_query = ("INSERT INTO public.tasks (task_tex, difficulty)"
-                             "VALUES (%(task_tex)s, %(difficulty)s) "
+        insert_task_query = ("INSERT INTO public.tasks "
+                             "(task_tex, difficulty, filetype) VALUES "
+                             "(%(task_tex)s, %(difficulty)s, %(filetype)s) "
                              "RETURNING task_id;")
         cur.execute(insert_task_query, {"task_tex": df_row.tex,
-                                        "difficulty": df_row.difficulty})
+                                        "difficulty": df_row.difficulty,
+                                        "filetype": df_row.filetype})
         task_id = cur.fetchone()[0]
         self.conn.commit()
 
@@ -150,7 +152,8 @@ class TaskShufflerDB:
 
     def get_tasks(self, filters: pd.Series) -> pd.DataFrame:
         filter_query = combine_filters(filters)
-        query = (f"SELECT s.name, t.name, tsk.task_id, tsk.task_tex "
+        query = (f"SELECT s.name, t.name, tsk.task_tex,"
+                 f"tsk.difficulty, t.folder, tsk.task_id, tsk.filetype "
                  f"FROM public.subjects s, public.topics t, public.tasks tsk, "
                  f"public.subject_topic st, public.topic_task tt "
                  f"WHERE s.subject_id = st.subject_id "
@@ -159,7 +162,9 @@ class TaskShufflerDB:
                  f"AND tsk.task_id = tt.task_id "
                  f"{filter_query}; ")
         df = pd.read_sql(query, self.engine).drop_duplicates()
-        df.columns = ["subject", "topic", "task_id", "tex"]
+        df.columns = [
+            "subject", "topic", "tex", "difficulty", "topic_path", "task_id", "filetype"
+        ]
         return df
 
 
