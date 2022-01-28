@@ -1,10 +1,3 @@
-from msilib import sequence
-from msilib.schema import Class
-from random import seed
-
-from matplotlib.pyplot import cla
-
-
 class Subject:
     subject_name: str
     subject_folder: str

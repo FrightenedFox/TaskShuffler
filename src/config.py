@@ -1,7 +1,7 @@
 from configparser import ConfigParser
 
 
-def config(section, filename="config/config.ini"):
+def config(section, filename="../config.ini"):
     parser = ConfigParser()
     parser.read(filename)
 

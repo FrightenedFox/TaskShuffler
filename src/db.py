@@ -1,5 +1,6 @@
 import logging
 import psycopg2
+from config import config
 
 
 class TaskShufflerDB:
@@ -10,19 +11,15 @@ class TaskShufflerDB:
 
     def connect(self):
         """Connect to the PostgreSQL database server."""
-        try:
-            params = config("postgresql")
-            logging.info("Connecting to the PostgreSQL database...")
-            self.conn = psycopg2.connect(**params)
+        params = config("postgresql")
+        logging.info("Connecting to the PostgreSQL database...")
+        self.conn = psycopg2.connect(**params)
 
-            # Display PostgreSQL version
-            cur = self.conn.cursor()
-            cur.execute('SELECT version()')
-            logging.info(f"PostgreSQL version:\t{cur.fetchone()}")
-            cur.close()
-
-        except (Exception, psycopg2.DatabaseError):
-            log_exception()
+        # Display PostgreSQL version
+        cur = self.conn.cursor()
+        cur.execute('SELECT version()')
+        logging.info(f"PostgreSQL version:\t{cur.fetchone()}")
+        cur.close()
 
         if self.conn is not None:
             self.is_connected = True
@@ -42,6 +39,8 @@ class TaskShufflerDB:
 
 
 if __name__ == "__main__":
+    from logging_setup import  initialize_logging
+    initialize_logging()
     logging.basicConfig(level=logging.DEBUG)
     db = TaskShufflerDB()
     db.connect()
