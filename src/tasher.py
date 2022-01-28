@@ -19,11 +19,16 @@ add_parser.add_argument("path", help="folder or file to add", type=str)
 add_parser.add_argument("-d", "--task-details",
                         help="CSV file with details about each task",
                         dest="details_csv")
+add_parser.add_argument("--sep", help="separator used in the CSV file",
+                        dest="csv_sep", default=';')
+
 args = main_parser.parse_args()
 
 dp = Dispatcher()
 match args.cmd:
     case "add":
-        dp.add_tasks(path=args.path, details_csv=args.details_csv)
+        dp.add_tasks(path=args.path,
+                     details_csv=args.details_csv,
+                     sep=args.csv_sep)
     case _:
         pass
