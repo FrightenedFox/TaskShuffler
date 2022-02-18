@@ -8,6 +8,7 @@ from logging_setup import initialize_logging
 
 if __name__ == '__main__':
     initialize_logging()
+
     lists_parent_parser = argparse.ArgumentParser(add_help=False)
     lists_parent_parser.add_argument(
         "-s", "--filter-subject",
@@ -35,18 +36,26 @@ if __name__ == '__main__':
     main_parser = argparse.ArgumentParser()
     command_subparsers = main_parser.add_subparsers(
         title="commands", dest="cmd")
+
     add_parser = command_subparsers.add_parser(
         "add", help="add tasks to the database")
     add_parser.add_argument(
         "path",
-        help="folder or file to add", type=str)
+        help="folder or file to add",
+        type=str)
     add_parser.add_argument(
         "-d", "--task-details",
-        help="CSV file with details about each task", dest="details_csv")
+        help="CSV file with details about each task",
+        dest="details_csv",
+        type=str
+    )
     add_parser.add_argument(
         "--sep",
         help="separator used in the CSV file (default=;)",
-        dest="csv_sep", default=';')
+        dest="csv_sep",
+        default=';',
+        type=str
+    )
 
     list_parser = command_subparsers.add_parser(
         "list", help="list available items", parents=[lists_parent_parser])
@@ -56,18 +65,23 @@ if __name__ == '__main__':
         "subjects", help="list all subjects", parents=[lists_parent_parser])
     topics_parser = list_subparsers.add_parser(
         "topics", help="list all topics", parents=[lists_parent_parser])
+
     tasks_parser = list_subparsers.add_parser(
         "tasks", help="list all tasks", parents=[lists_parent_parser])
     tasks_parser.add_argument(
         "-o", "--output-dir",
         help="path where to save pdf with printed tasks and their solutions",
         dest="output_dir",
-        metavar="DIR"
+        metavar="DIR",
+        type=str
     )
     tasks_parser.add_argument(
         "--sep",
         help="separator used in the CSV file (default=;)",
-        dest="csv_sep", default=';')
+        dest="csv_sep",
+        default=';',
+        type=str
+    )
 
     args = main_parser.parse_args()
 
@@ -76,20 +90,19 @@ if __name__ == '__main__':
 
     dp = Dispatcher(db)
 
-    match args.cmd:
-        case "add":
-            dp.add_tasks(
-                path=args.path, details_csv=args.details_csv, sep=args.csv_sep)
-        case "list":
-            filters = pd.Series({"subject": args.filter_subject,
-                                 "topic": args.filter_topic})
-            match args.what_to_list:
-                case "subjects":
-                    dp.list_subjects(filters)
-                case "topics":
-                    dp.list_topics(filters, args.group_by)
-                case "tasks":
-                    dp.list_tasks(filters, args.group_by,
-                                  args.output_dir, args.csv_sep)
+    if args.cmd == "add":
+        dp.add_tasks(path=args.path,
+                     details_csv=args.details_csv,
+                     sep=args.csv_sep)
+    elif args.cmd == "list":
+        filters = pd.Series({"subject": args.filter_subject,
+                             "topic": args.filter_topic})
+        # NOTE: may be worth bundling with dict get and dataclasses
+        if args.what_to_list == "subjects":
+            dp.list_subjects(filters)
+        elif args.what_to_list == "topics":
+            dp.list_topics(filters, args.group_by)
+        elif args.what_to_list == "tasks":
+            dp.list_tasks(filters, args.group_by, args.output_dir, args.csv_sep)
 
     db.disconnect()

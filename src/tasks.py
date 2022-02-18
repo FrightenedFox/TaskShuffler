@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import shutil
 from datetime import datetime
@@ -8,51 +9,42 @@ import pandas as pd
 from db import TaskShufflerDB
 from config import config
 
+# TODO: separate python file with constants
 SUPPORTED_FILETYPES = [".png", ".jpg", ".jpeg"]
 
 
-class Subject:
-    subject_name: str
-    subject_folder: str
-    topics_list: list
-    
-    def __init__(self, name: str, folder: str) -> None:
-        self.subject_name = name
-        self.subject_folder = folder
-        pass
-
-
-class Topic:
-    topic_name: str
-    topic_folder: str
-    tasks_list: list
-
-    def __init__(self, name: str, folder: str) -> None:
-        self.topic_name = name
-        self.topic_folder = folder
-        pass
-
-
-class Task:
-    task_tex: str
-    solution_path: str
-    difficulty: int
-
-    def __init__(self, task_tex: str, solution: str, difficulty: int = 3) -> None:
-        self.task_tex = task_tex
-        self.solution_path = solution
-        self.difficulty = difficulty
-        pass
+def clean_path(path: str, trailing_slash: bool = False) -> str:
+    """Sets the correct slashes for different operating systems, adds the
+    trailing slash to the end if `trailing_slash` is set to True."""
+    if trailing_slash and path[-1] not in ["/", "\\"]:
+        path += "/"
+    if sys.platform.startswith('win'):
+        path = path.replace("/", "\\")
+        return path
+    elif sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
+        path = path.replace("\\", "/")
+        return path
+    else:
+        raise OSError("This operation system is not supported yet.")
 
 
 class Dispatcher:
+    """Contains all the algorithms for each command."""
     _difficulty_trials = 0
 
-    def __init__(self, db: TaskShufflerDB) -> None:
+    def __init__(self, db: TaskShufflerDB):
+        """Initializes all the common attributes of the Dispatcher class.
+        Makes sure all necessary paths exist.
+
+        Parameters
+        ----------
+            db:
+                An instance of the TaskShufflerDB class.
+        """
         self.db = db
         self.params = config("tasher")
-        self.private_dir = os.path.join(self.params["directory"], ".tasher/")
-        self.solutions_dir = os.path.join(self.private_dir, "solutions/")
+        self.private_dir = clean_path(os.path.join(self.params["directory"], ".tasher/"))
+        self.solutions_dir = clean_path(os.path.join(self.private_dir, "solutions/"))
         self.solution_prefix = self.params['solution_prefix']
         if not os.path.exists(self.private_dir):
             os.makedirs(self.private_dir)
@@ -60,11 +52,10 @@ class Dispatcher:
             os.makedirs(self.solutions_dir)
 
     def add_tasks(self, path: str, details_csv: str, sep: str) -> None:
-        path = path.replace("/", "\\")
-        # Read all given files
+        path = clean_path(path)
         if os.path.isdir(path):
-            if path[-1] not in ["/", "\\"]:
-                path += "/"
+            # Given path is a directory
+            path = clean_path(path, trailing_slash=True)
             files_df = pd.DataFrame(columns=["filepath", "filename", "filetype"])
             for i, filepath in enumerate(glob.iglob(path + "**/**", recursive=True)):
                 filetype = os.path.splitext(filepath)[1]
@@ -78,6 +69,7 @@ class Dispatcher:
             else:
                 df = self.get_details(files_df.copy())
         elif os.path.splitext(path)[1] in SUPPORTED_FILETYPES:
+            # Given path is a supported solution file
             df = self.get_details(pd.DataFrame({
                 "filepath": [path],
                 "filename": [os.path.basename(path)],
