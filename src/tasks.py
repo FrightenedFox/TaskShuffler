@@ -1,7 +1,6 @@
 import os
 import sys
 import logging
-import glob
 import shutil
 from datetime import datetime
 
@@ -53,6 +52,23 @@ class Dispatcher:
         if not os.path.exists(self.solutions_dir):
             os.makedirs(self.solutions_dir)
 
+    def get_sol_filename(self,
+                         solution_id: int,
+                         solution_filetype: str) -> str:
+        """Returns solution filename."""
+        return f"{self.solution_prefix}{solution_id}{solution_filetype}"
+
+    def get_sol_path(self,
+                     topic: str,
+                     solution_id: int,
+                     solution_filetype: str) -> str:
+        """Returns full or relative path to the solution."""
+        return os.path.join(
+            self.solutions_dir,
+            topic,
+            self.get_sol_filename(solution_id, solution_filetype)
+        )
+
     def add_tasks(self, path: str, details_csv: str, sep: str) -> None:
         path = clean_path(path)
         if os.path.isdir(path):
@@ -90,10 +106,10 @@ class Dispatcher:
                 df = solutions_df.merge(details_df, on="solution_name",
                                         how="inner", validate="many_to_one")
             else:
-                df = self.get_details(solutions_df.copy())
+                df = self.get_task_details(solutions_df.copy())
         elif os.path.splitext(path)[1] in SUPPORTED_FILETYPES:
             # Given path is a supported solution file
-            df = self.get_details(pd.DataFrame({
+            df = self.get_task_details(pd.DataFrame({
                 "solution_name": [os.path.splitext(os.path.basename(path))[0]],
                 "solution_path": [path],
                 "solution_filetype": [os.path.splitext(path)[1]],
@@ -111,29 +127,50 @@ class Dispatcher:
                 os.makedirs(topic_path)
 
         # Add info to the database and copy files to private folder
-        for index, row in df.iterrows():
-            solution_id = self.db.insert_task(row)
-            new_solution_path = os.path.join(
-                row.topic_path,
-                f"{self.solution_prefix}{solution_id}{row.solution_filetype}")
-            shutil.copy(row.solution_path, new_solution_path)
+        df.groupby("solution_name").apply(self.task_to_db)
 
-    def get_details(self, df: pd.DataFrame) -> pd.DataFrame:
+    def task_to_db(self, task_df: pd.DataFrame) -> None:
+        """Adds a new task with all of its solutions to the DB."""
+        task_df.reset_index(inplace=True)
+        solution_ids, deleted_solutions = self.db.insert_task(task_df)
+
+        # Copy files to private directory and rename them accordingly
+        for row_id, sol in solution_ids.iterrows():
+            new_solution_path = os.path.join(
+                task_df.topic_path[0],
+                self.get_sol_filename(sol.solution_id,
+                                      task_df.solution_filetype[row_id])
+            )
+            shutil.copy(task_df.solution_path[row_id], new_solution_path)
+        logging.debug(f"Inserted solutions:\n {solution_ids}")
+
+        # Delete old solutions from private directory
+        for row_id, deleted_sol in deleted_solutions.iterrows():
+            os.remove(self.get_sol_path(
+                topic=task_df.topic_path[0],
+                solution_id=deleted_sol.solution_id,
+                solution_filetype=deleted_sol.solution_filetype
+            ))
+        if deleted_solutions.size > 0:
+            logging.info(f"Deleted solutions:\n {deleted_solutions}")
+
+    def get_task_details(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ask user for details about each file in the df."""
-        df.loc[:, "subject"] = input("What subject are these tasks for? ")
+        df.loc[:, "subject"] = input("\nWhat subject are these tasks for? ")
         df.loc[:, "topic"] = input("What is the topic of these tasks? ")
         for row_id, row in df.iterrows():
-            print(f"Working with the solution "
-                  f"whose name is {row.solution_name}.")
+            print(f"\n--- Working with the solution "
+                  f"whose name is '{row.solution_name}' ---")
             df.loc[row_id, "tex"] = input(f"Provide the TeX for that task: ")
-            df.loc[row_id, "difficulty"] = self.get_difficulty()
-            df.loc[row_id, "numerical_answer"] = input(
-                f"Provide the numerical answer for that solution: ")
+            df.loc[row_id, "difficulty"] = self.get_task_difficulty()
+            df.loc[row_id, "answer"] = input(
+                f"Provide the answer for that solution: ")
         return df
 
-    def get_difficulty(self) -> int:
+    def get_task_difficulty(self) -> int:
         """Ask user until it gives correct answer or exceeds max number of trials."""
-        difficulty = input(f"Provide the TeX for that task (integer, default=3): ")
+        difficulty = input(f"Provide the difficulty level "
+                           f"of that task (integer, default=3): ")
         self._difficulty_trials += 1
         if not difficulty:
             self._difficulty_trials = 0
@@ -143,7 +180,7 @@ class Dispatcher:
                 int_difficulty = int(difficulty)
             except ValueError:
                 print("Only integers are supported, preferably in the range 1 to 5.")
-                return self.get_difficulty()
+                return self.get_task_difficulty()
             else:
                 self._difficulty_trials = 0
                 return int_difficulty
@@ -174,8 +211,7 @@ class Dispatcher:
         # If pdf directory is given generate all files
         if output_dir is not None and os.path.isdir(output_dir) and df.size > 0:
             with open(self.params["latex_preamble"]) as preamble, \
-                    open(self.params["latex_preamble"]) as ending \
-                    :
+                    open(self.params["latex_preamble"]) as ending:
                 pass
 
             # Create folders

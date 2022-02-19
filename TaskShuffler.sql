@@ -1,34 +1,43 @@
 create table subjects
 (
-    subject_id integer generated always as identity
+    subject_id   integer generated always as identity
         constraint subjects_pkey
             primary key,
-    name       text not null
+    subject_name text not null
 );
 
 create unique index subjects_uindex
     on subjects (subject_id);
 
+create unique index subjects_name_uindex
+    on subjects (subject_name);
+
 create table topics
 (
-    topic_id integer generated always as identity
+    topic_id     integer generated always as identity
         constraint topics_pk
             primary key,
-    name     text not null,
-    folder   text not null
+    topic_name   text not null,
+    topic_folder text not null
 );
 
 create unique index topics_uindex
     on topics (topic_id, topic_id);
 
+create unique index topics_topic_folder_uindex
+    on topics (topic_folder);
+
+create unique index topics_topic_name_uindex
+    on topics (topic_name);
+
 create table tasks
 (
-    task_id          integer generated always as identity
+    task_id    integer generated always as identity
         constraint tasks_pkey
             primary key,
-    task_tex         text              not null,
-    difficulty       integer default 3 not null,
-    numerical_answer double precision
+    task_tex   text              not null,
+    difficulty integer default 3 not null,
+    answer     text
 );
 
 create unique index tasks_uindex
