@@ -2,6 +2,8 @@ import os
 import sys
 import logging
 import shutil
+import subprocess
+from typing import List
 from datetime import datetime
 
 import pandas as pd
@@ -26,6 +28,19 @@ def clean_path(path: str, trailing_slash: bool = False) -> str:
         return path
     else:
         raise OSError("This operation system is not supported yet.")
+
+
+def make_solution_ids_list(df: pd.DataFrame) -> pd.DataFrame:
+    """Generates the list of solution IDs for each task."""
+    solution_ids_list = df.groupby("task_id").apply(
+        lambda x: x.solution_id.drop_duplicates().tolist())
+    solution_ids_list.name = "solution_ids_list"
+    df = df.merge(solution_ids_list,
+                  left_on="task_id",
+                  right_index=True,
+                  how="inner",
+                  validate="many_to_one")
+    return df
 
 
 class Dispatcher:
@@ -193,18 +208,13 @@ class Dispatcher:
         df = self.db.get_tasks(filters)
 
         # Generate the list of solution IDs
-        solution_ids_list = df.groupby("task_id").apply(lambda x: x.solution_id.tolist())
-        solution_ids_list.name = "solution_ids_list"
-        df = df.merge(solution_ids_list,
-                      left_on="task_id",
-                      right_index=True,
-                      how="inner",
-                      validate="many_to_one")
+        df = make_solution_ids_list(df)
 
         # Display the result of the query
         if not verbose:
             cols = ["subject", "topic", "task_id", "difficulty", "solution_ids_list"]
-            df_to_print = df.loc[:, cols].drop_duplicates(subset="task_id")
+            df_to_print = df.loc[:, cols].drop_duplicates(
+                subset=["subject", "topic", "task_id"])
         else:
             pd.options.display.max_columns = 20
             df_to_print = df.copy()
@@ -215,8 +225,54 @@ class Dispatcher:
 
         # If pdf directory is given generate all files
         if output_dir is not None and os.path.isdir(output_dir) and df.size > 0:
-            with open(self.params["latex_preamble"]) as preamble, \
-                    open(self.params["latex_preamble"]) as ending:
-                pass
+            self.generate_latex_document([df], output_dir)
         elif output_dir is not None and not os.path.isdir(output_dir):
             raise ValueError("Given path is not a directory")
+
+    def generate_latex_document(self, dfs: List[pd.DataFrame], output_dir: str):
+        with open(self.params["latex_preamble"], "r", encoding="utf-8") as preamble_file:
+            latex_preamble = preamble_file.read()
+        with open(self.params["latex_ending"], "r", encoding="utf-8") as ending_file:
+            latex_ending = ending_file.read()
+
+        # TODO: custom section names from list and custom prefix
+        latex_tasks = ""
+        for ind, df in enumerate(dfs):
+            latex_tasks += self.generate_latex_tasks_section(f"DF \\#{ind}", df.tex)
+
+        results_folder = os.path.join(
+            output_dir,
+            f"{self.params['folder_prefix']}"
+            f"{datetime.now().strftime(' %Y-%m-%d %H-%M-%S')}")
+        os.makedirs(results_folder)
+
+        tasks_output_path = os.path.join(results_folder, "tasks.tex")
+        with open(tasks_output_path, "w", encoding="utf-8") as latex_file:
+            latex_file.write(f"{latex_preamble}{latex_tasks}{latex_ending}")
+
+        # TODO: options to customize this command (e.g. other interaction mode)
+        cmd = ["pdflatex",
+               # "-synctex", "1",
+               "-output-directory", results_folder,
+               "-interaction", "batchmode",
+               tasks_output_path]
+        proc = subprocess.Popen(cmd)
+        proc.communicate()
+        ret_code = proc.returncode
+        if not ret_code == 0:
+            os.remove(os.path.join(results_folder, "tasks.pdf"))
+            raise ValueError(f"Error {ret_code} executing command: {' '.join(cmd)}")
+
+        # TODO: options not to remove this files
+        os.remove(os.path.join(results_folder, "tasks.log"))
+        os.remove(os.path.join(results_folder, "tasks.aux"))
+        os.remove(os.path.join(results_folder, "tasks.out"))
+
+    def generate_latex_tasks_section(self, sec_name: str, tex_series: pd.Series) -> str:
+        """Generates a section in the final LaTeX document."""
+        # TODO: add more options and separate config section
+        latex = f"\n\\section{{ {sec_name} }}\n\\begin{{enumerate}}\n"
+        for tex in tex_series:
+            latex += f"\t\\item {tex}\n"
+        latex += f"\\end{{enumerate}}\n\\pagebreak\n"
+        return latex
