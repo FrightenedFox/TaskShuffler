@@ -22,19 +22,20 @@ register_adapter(np.float64, adapt_numpy_float64)
 register_adapter(np.int64, adapt_numpy_int64)
 
 
-def combine_filters(filters: pd.Series):
-    query = ""
+def combine_filters(filters: pd.Series) -> Tuple[str, Tuple]:
+    query, params = "TRUE ", ()
     for key, filter_list in filters.items():
         table = "s" if key == "subject" else "t"
         if filter_list is not None:
+            params += tuple(filter_list)
             subquery = "AND (FALSE"
-            for filter_part in filter_list:
-                subquery += f" OR {table}.name = '{filter_part}'"
+            for _ in filter_list:
+                subquery += f" OR {table}.{key}_name = %s"
             subquery += ") "
         else:
             subquery = ""
         query += subquery
-    return query
+    return query, params
 
 
 class TaskShufflerDB:
@@ -93,15 +94,13 @@ class TaskShufflerDB:
         subject_id = cur.fetchone()[0]
 
         # Make sure the topic exists
-        insert_topic_query = ("INSERT INTO public.topics (topic_name, topic_folder) "
-                              "VALUES (%(topic_name)s, %(topic_path)s) "
+        insert_topic_query = ("INSERT INTO public.topics (topic_name) "
+                              "VALUES (%(topic_name)s) "
                               "ON CONFLICT (topic_name) DO UPDATE "
-                              "SET topic_name = excluded.topic_name, "
-                              "    topic_folder = excluded.topic_folder "
+                              "SET topic_name = excluded.topic_name "
                               "RETURNING topic_id;")
         cur.execute(insert_topic_query,
-                    {"topic_name": task_df.topic[0],
-                     "topic_path": task_df.topic_path[0]})
+                    {"topic_name": task_df.topic[0]})
         topic_id = cur.fetchone()[0]
 
         # Make sure the topic is connected to the subject
@@ -168,43 +167,37 @@ class TaskShufflerDB:
                       f"{task_df.subject[0]} subject.")
         return solution_ids, deleted_solutions
 
-    def get_subjects(self, filters: pd.Series) -> pd.DataFrame:
-        filter_query = combine_filters(filters)
-        query = (f"SELECT s.subject_name "
-                 f"FROM public.subjects s, public.topics t, public.subject_topic st "
-                 f"WHERE s.subject_id = st.subject_id "
-                 f"AND t.topic_id = st.topic_id "
-                 f"{filter_query}; ")
-        df = pd.read_sql_query(query, self.sqlalchemy_engine).drop_duplicates()
-        df.columns = ["subject"]
-        return df
-
-    def get_topics(self, filters: pd.Series) -> pd.DataFrame:
-        filter_query = combine_filters(filters)
-        query = (f"SELECT s.name, t.topic_name "
-                 f"FROM public.subjects s, public.topics t, public.subject_topic st "
-                 f"WHERE s.subject_id = st.subject_id "
-                 f"AND t.topic_id = st.topic_id "
-                 f"{filter_query}; ")
-        df = pd.read_sql(query, self.sqlalchemy_engine).drop_duplicates()
+    def get_subjects_topics(self, filters: pd.Series) -> pd.DataFrame:
+        filter_query, params = combine_filters(filters)
+        query = (f"SELECT s.subject_name, t.topic_name "
+                 f"FROM public.topics t "
+                 f"JOIN subject_topic st on t.topic_id = st.topic_id "
+                 f"JOIN subjects s on s.subject_id = st.subject_id "
+                 f"WHERE {filter_query}; ")
+        df = pd.read_sql(query, self.sqlalchemy_engine, params=params)
         df.columns = ["subject", "topic"]
         return df
 
     def get_tasks(self, filters: pd.Series) -> pd.DataFrame:
-        filter_query = combine_filters(filters)
-        query = (f"SELECT s.name, t.name, tsk.task_tex,"
-                 f"tsk.difficulty, t.folder, tsk.task_id, tsk.filetype "
-                 f"FROM public.subjects s, public.topics t, public.tasks tsk, "
-                 f"public.subject_topic st, public.topic_task tt "
-                 f"WHERE s.subject_id = st.subject_id "
-                 f"AND t.topic_id = st.topic_id "
-                 f"AND t.topic_id = tt.topic_id "
-                 f"AND tsk.task_id = tt.task_id "
-                 f"{filter_query}; ")
-        df = pd.read_sql(query, self.sqlalchemy_engine).drop_duplicates()
-        df.columns = [
-            "subject", "topic", "tex", "difficulty", "topic_path", "task_id", "filetype"
-        ]
+        filter_query, params = combine_filters(filters)
+        query = (f"SELECT s.subject_id as \"subject_id\", "
+                 f"       s.subject_name as \"subject\", "
+                 f"       t.topic_id as \"topic_id\", "
+                 f"       t.topic_name as \"topic\", "
+                 f"       tsk.task_id as \"task_id\", "
+                 f"       tsk.task_tex as \"tex\", "
+                 f"       tsk.difficulty as \"difficulty\", "
+                 f"       tsk.answer as \"answer\", "
+                 f"       sol.solution_id as \"solution_id\", "
+                 f"       sol.solution_filetype as \"solution_filetype\" "
+                 f"FROM tasks tsk "
+                 f"JOIN solutions sol on tsk.task_id = sol.task_id "
+                 f"JOIN topic_task tt on tsk.task_id = tt.task_id "
+                 f"JOIN topics t on t.topic_id = tt.topic_id "
+                 f"JOIN subject_topic st on tt.topic_id = st.topic_id "
+                 f"JOIN subjects s on st.subject_id = s.subject_id "
+                 f"WHERE {filter_query};")
+        df = pd.read_sql_query(query, self.sqlalchemy_engine, params=params)
         return df
 
 

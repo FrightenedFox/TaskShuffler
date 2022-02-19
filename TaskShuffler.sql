@@ -14,18 +14,14 @@ create unique index subjects_name_uindex
 
 create table topics
 (
-    topic_id     integer generated always as identity
+    topic_id   integer generated always as identity
         constraint topics_pk
             primary key,
-    topic_name   text not null,
-    topic_folder text not null
+    topic_name text not null
 );
 
 create unique index topics_uindex
     on topics (topic_id, topic_id);
-
-create unique index topics_topic_folder_uindex
-    on topics (topic_folder);
 
 create unique index topics_topic_name_uindex
     on topics (topic_name);

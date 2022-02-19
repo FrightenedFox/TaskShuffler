@@ -59,13 +59,11 @@ class Dispatcher:
         return f"{self.solution_prefix}{solution_id}{solution_filetype}"
 
     def get_sol_path(self,
-                     topic: str,
                      solution_id: int,
                      solution_filetype: str) -> str:
         """Returns full or relative path to the solution."""
         return os.path.join(
             self.solutions_dir,
-            topic,
             self.get_sol_filename(solution_id, solution_filetype)
         )
 
@@ -118,14 +116,6 @@ class Dispatcher:
             raise ValueError(f"Filetype is not supported yet. "
                              f"Accepted filetypes: {SUPPORTED_FILETYPES}")
 
-        # Make sure there is a directory for each topic
-        df.loc[:, "topic_path"] = df.topic.apply(
-            lambda x: os.path.join(self.solutions_dir, x)
-        )
-        for topic_path in df.topic_path.drop_duplicates():
-            if not os.path.exists(topic_path):
-                os.makedirs(topic_path)
-
         # Add info to the database and copy files to private folder
         df.groupby("solution_name").apply(self.task_to_db)
 
@@ -136,18 +126,15 @@ class Dispatcher:
 
         # Copy files to private directory and rename them accordingly
         for row_id, sol in solution_ids.iterrows():
-            new_solution_path = os.path.join(
-                task_df.topic_path[0],
-                self.get_sol_filename(sol.solution_id,
-                                      task_df.solution_filetype[row_id])
-            )
+            new_solution_path = self.get_sol_path(
+                sol.solution_id,
+                task_df.solution_filetype[row_id])
             shutil.copy(task_df.solution_path[row_id], new_solution_path)
         logging.debug(f"Inserted solutions:\n {solution_ids}")
 
         # Delete old solutions from private directory
         for row_id, deleted_sol in deleted_solutions.iterrows():
             os.remove(self.get_sol_path(
-                topic=task_df.topic_path[0],
                 solution_id=deleted_sol.solution_id,
                 solution_filetype=deleted_sol.solution_filetype
             ))
@@ -190,10 +177,10 @@ class Dispatcher:
             return 3
 
     def list_subjects(self, filters: pd.Series) -> None:
-        print(self.db.get_subjects(filters))
+        print(self.db.get_subjects_topics(filters).loc[:, ["subject"]])
 
     def list_topics(self, filters: pd.Series, group_by: str) -> None:
-        df = self.db.get_topics(filters)
+        df = self.db.get_subjects_topics(filters)
         if group_by == "none":
             print(df)
         else:
@@ -201,46 +188,35 @@ class Dispatcher:
 
     def list_tasks(self, filters: pd.Series,
                    group_by: str, output_dir: str,
-                   csv_sep: str = ";") -> None:
+                   csv_sep: str = ";",
+                   verbose: int = 0) -> None:
         df = self.db.get_tasks(filters)
-        if group_by == "none":
-            print(df)
+
+        # Generate the list of solution IDs
+        solution_ids_list = df.groupby("task_id").apply(lambda x: x.solution_id.tolist())
+        solution_ids_list.name = "solution_ids_list"
+        df = df.merge(solution_ids_list,
+                      left_on="task_id",
+                      right_index=True,
+                      how="inner",
+                      validate="many_to_one")
+
+        # Display the result of the query
+        if not verbose:
+            cols = ["subject", "topic", "task_id", "difficulty", "solution_ids_list"]
+            df_to_print = df.loc[:, cols].drop_duplicates(subset="task_id")
         else:
-            df.groupby(group_by).apply(print)
+            pd.options.display.max_columns = 20
+            df_to_print = df.copy()
+        if group_by == "none":
+            print(df_to_print)
+        else:
+            df_to_print.groupby(group_by).apply(print)
 
         # If pdf directory is given generate all files
         if output_dir is not None and os.path.isdir(output_dir) and df.size > 0:
             with open(self.params["latex_preamble"]) as preamble, \
                     open(self.params["latex_preamble"]) as ending:
                 pass
-
-            # Create folders
-            results_folder = os.path.join(
-                output_dir,
-                f"{self.params['folder_prefix']}"
-                f"{datetime.now().strftime(' %Y-%m-%d %H-%M-%S')}")
-            solution_folder = os.path.join(
-                results_folder, f"{self.solution_prefix}images")
-            os.makedirs(results_folder)
-            os.makedirs(solution_folder)
-
-            # Copy solutions to the destination folder
-            for index, row in df.iterrows():
-                start_solution_path = os.path.join(
-                    row.topic_path,
-                    f"{self.solution_prefix}{row.task_id}{row.filetype}").replace(
-                    "/", "\\"
-                )
-                destination_solution_path = os.path.join(
-                    solution_folder,
-                    f"{self.solution_prefix}{index + 1}{row.filetype}").replace(
-                    "/", "\\"
-                )
-                shutil.copy(start_solution_path, destination_solution_path)
-
-            csv_path = os.path.join(results_folder, "result.csv")
-            df.to_csv(csv_path, sep=csv_sep,
-                      encoding="UTF-8", index_label="result_index")
-
         elif output_dir is not None and not os.path.isdir(output_dir):
             raise ValueError("Given path is not a directory")

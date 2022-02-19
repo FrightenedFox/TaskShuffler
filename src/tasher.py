@@ -69,6 +69,12 @@ if __name__ == '__main__':
     tasks_parser = list_subparsers.add_parser(
         "tasks", help="list all tasks", parents=[lists_parent_parser])
     tasks_parser.add_argument(
+        "-v", "--verbose",
+        help="print more details",
+        action="count",
+        default=0
+    )
+    tasks_parser.add_argument(
         "-o", "--output-dir",
         help="path where to save pdf with printed tasks and their solutions",
         dest="output_dir",
@@ -103,6 +109,10 @@ if __name__ == '__main__':
         elif args.what_to_list == "topics":
             dp.list_topics(filters, args.group_by)
         elif args.what_to_list == "tasks":
-            dp.list_tasks(filters, args.group_by, args.output_dir, args.csv_sep)
+            dp.list_tasks(filters,
+                          args.group_by,
+                          args.output_dir,
+                          args.csv_sep,
+                          args.verbose)
 
     db.disconnect()
