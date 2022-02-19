@@ -1,4 +1,4 @@
-create table if not exists subjects
+create table subjects
 (
     subject_id integer generated always as identity
         constraint subjects_pkey
@@ -6,10 +6,10 @@ create table if not exists subjects
     name       text not null
 );
 
-create unique index if not exists subjects_uindex
+create unique index subjects_uindex
     on subjects (subject_id);
 
-create table if not exists topics
+create table topics
 (
     topic_id integer generated always as identity
         constraint topics_pk
@@ -18,56 +18,78 @@ create table if not exists topics
     folder   text not null
 );
 
-create unique index if not exists topics_uindex
+create unique index topics_uindex
     on topics (topic_id, topic_id);
 
-create table if not exists tasks
+create table tasks
 (
-    task_id    integer generated always as identity
+    task_id          integer generated always as identity
         constraint tasks_pkey
             primary key,
-    task_tex   text              not null,
-    difficulty integer default 3 not null,
-    filetype   text              not null
+    task_tex         text              not null,
+    difficulty       integer default 3 not null,
+    numerical_answer double precision
 );
 
-create unique index if not exists tasks_uindex
+create unique index tasks_uindex
     on tasks (task_id);
 
-create table if not exists subject_topic
+create unique index tasks_task_tex_uindex
+    on tasks (task_tex);
+
+create table subject_topic
 (
     subject_id integer not null
         constraint subject_topic_subject_fk
-            references subjects,
+            references subjects
+            on update cascade on delete restrict,
     topic_id   integer not null
         constraint subject_topic_topic_fk
-            references topics,
+            references topics
+            on update cascade on delete restrict,
     constraint subject_topic_pk
         primary key (subject_id, topic_id)
 );
 
-create index if not exists fki_subject_topic_subject_fk
+create index fki_subject_topic_subject_fk
     on subject_topic (subject_id);
 
-create index if not exists fki_subject_topic_topic_fk
+create index fki_subject_topic_topic_fk
     on subject_topic (topic_id);
 
-create table if not exists topic_task
+create table topic_task
 (
     topic_id integer not null
         constraint topic_fk
-            references topics,
+            references topics
+            on update cascade on delete restrict,
     task_id  integer not null
         constraint task_fk
-            references tasks,
+            references tasks
+            on update cascade on delete restrict,
     constraint topic_task_id
         primary key (topic_id, task_id)
 );
 
-create index if not exists fki_task_fk
+create index fki_task_fk
     on topic_task (task_id);
 
-create index if not exists fki_topic_fk
+create index fki_topic_fk
     on topic_task (topic_id);
+
+create table solutions
+(
+    solution_id       integer generated always as identity
+        constraint solutions_pk
+            primary key,
+    task_id           integer not null
+        constraint solution_task_fk
+            references tasks
+            on update cascade on delete cascade,
+    solution_filetype text    not null
+);
+
+create unique index solutions_solution_id_uindex
+    on solutions (solution_id);
 
 

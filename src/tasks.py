@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 import glob
 import shutil
 from datetime import datetime
@@ -30,7 +31,8 @@ def clean_path(path: str, trailing_slash: bool = False) -> str:
 
 class Dispatcher:
     """Contains all the algorithms for each command."""
-    _difficulty_trials = 0
+    _difficulty_trials: int = 0
+    _max_difficulty_trials: int = 5
 
     def __init__(self, db: TaskShufflerDB):
         """Initializes all the common attributes of the Dispatcher class.
@@ -55,62 +57,88 @@ class Dispatcher:
         path = clean_path(path)
         if os.path.isdir(path):
             # Given path is a directory
-            path = clean_path(path, trailing_slash=True)
-            files_df = pd.DataFrame(columns=["filepath", "filename", "filetype"])
-            for i, filepath in enumerate(glob.iglob(path + "**/**", recursive=True)):
-                filetype = os.path.splitext(filepath)[1]
-                if filetype in SUPPORTED_FILETYPES:
-                    files_df.at[i] = [filepath, os.path.basename(filepath), filetype]
-            files_df.drop_duplicates(inplace=True)
+            solutions_df = pd.DataFrame(columns=["solution_name", "solution_path"])
+            for i, item in enumerate(os.listdir(path)):
+                item_path = os.path.join(path, item)
+                if os.path.isdir(item_path):
+                    # item_path is a directory
+                    for j, sub_item in enumerate(os.listdir(item_path)):
+                        sub_item_path = os.path.join(item_path, sub_item)
+                        if os.path.splitext(sub_item_path)[1] in SUPPORTED_FILETYPES:
+                            solutions_df = pd.concat([solutions_df, pd.DataFrame({
+                                "solution_name": [os.path.splitext(item)[0]],
+                                "solution_path": [sub_item_path],
+                                "solution_filetype": [os.path.splitext(sub_item_path)[1]],
+                            })], ignore_index=True)
+                elif os.path.splitext(item_path)[1] in SUPPORTED_FILETYPES:
+                    # item_path is a supported file
+                    solutions_df = pd.concat([solutions_df, pd.DataFrame({
+                        "solution_name": [os.path.splitext(item)[0]],
+                        "solution_path": [item_path],
+                        "solution_filetype": [os.path.splitext(item_path)[1]],
+                    })], ignore_index=True)
+                else:
+                    logging.warning(f"Unsupported file was skipped: {item_path}")
+
+            print(solutions_df)
+
             if details_csv is not None:
                 details_df = pd.read_csv(details_csv, sep=sep)
-                df = files_df.merge(details_df, on="filename",
-                                    how="left", validate="one_to_one")
+                details_df.loc[:, "solution_name"] = details_df.solution.apply(
+                    lambda x: os.path.splitext(os.path.basename(x))[0]
+                )
+                df = solutions_df.merge(details_df, on="solution_name",
+                                        how="inner", validate="many_to_one")
             else:
-                df = self.get_details(files_df.copy())
+                df = self.get_details(solutions_df.copy())
         elif os.path.splitext(path)[1] in SUPPORTED_FILETYPES:
             # Given path is a supported solution file
             df = self.get_details(pd.DataFrame({
-                "filepath": [path],
-                "filename": [os.path.basename(path)],
-                "filetype": [os.path.splitext(path)[1]],
+                "solution_name": [os.path.splitext(os.path.basename(path))[0]],
+                "solution_path": [path],
+                "solution_filetype": [os.path.splitext(path)[1]],
             }))
         else:
             raise ValueError(f"Filetype is not supported yet. "
                              f"Accepted filetypes: {SUPPORTED_FILETYPES}")
 
         # Make sure there is a directory for each topic
-        df.loc[:, "topic_path"] = self.solutions_dir + df.topic
+        df.loc[:, "topic_path"] = df.topic.apply(
+            lambda x: os.path.join(self.solutions_dir, x)
+        )
         for topic_path in df.topic_path.drop_duplicates():
             if not os.path.exists(topic_path):
                 os.makedirs(topic_path)
 
         # Add info to the database and copy files to private folder
         for index, row in df.iterrows():
-            task_id = self.db.insert_task(row)
+            solution_id = self.db.insert_task(row)
             new_solution_path = os.path.join(
                 row.topic_path,
-                f"{self.solution_prefix}{task_id}{row.filetype}")
-            shutil.copy(row.filepath, new_solution_path)
+                f"{self.solution_prefix}{solution_id}{row.solution_filetype}")
+            shutil.copy(row.solution_path, new_solution_path)
 
     def get_details(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ask user for details about each file in the df."""
         df.loc[:, "subject"] = input("What subject are these tasks for? ")
         df.loc[:, "topic"] = input("What is the topic of these tasks? ")
         for row_id, row in df.iterrows():
-            print(f"Working with the task whose filename is {row.filename}.")
+            print(f"Working with the solution "
+                  f"whose name is {row.solution_name}.")
             df.loc[row_id, "tex"] = input(f"Provide the TeX for that task: ")
             df.loc[row_id, "difficulty"] = self.get_difficulty()
+            df.loc[row_id, "numerical_answer"] = input(
+                f"Provide the numerical answer for that solution: ")
         return df
 
-    def get_difficulty(self, max_trials: int = 5) -> int:
+    def get_difficulty(self) -> int:
         """Ask user until it gives correct answer or exceeds max number of trials."""
         difficulty = input(f"Provide the TeX for that task (integer, default=3): ")
         self._difficulty_trials += 1
         if not difficulty:
             self._difficulty_trials = 0
             return 3
-        elif self._difficulty_trials < max_trials:
+        elif self._difficulty_trials < self._max_difficulty_trials:
             try:
                 int_difficulty = int(difficulty)
             except ValueError:
@@ -145,8 +173,8 @@ class Dispatcher:
 
         # If pdf directory is given generate all files
         if output_dir is not None and os.path.isdir(output_dir) and df.size > 0:
-            with open(self.params["latex_preamble"]) as preamble,\
-                    open(self.params["latex_preamble"]) as ending\
+            with open(self.params["latex_preamble"]) as preamble, \
+                    open(self.params["latex_preamble"]) as ending \
                     :
                 pass
 

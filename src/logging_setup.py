@@ -7,7 +7,7 @@ def initialize_logging():
     params = config("logging")
 
     log_formatter = logging.Formatter(
-        "%(asctime)s [%(threadName)-12.12s] [%(filename)-20.20s] [%(funcName)-30.30s]"
+        "%(asctime)s [%(threadName)-10.10s] [%(filename)-10.10s] [%(funcName)-15.15s]"
         "[l %(lineno)-4.4s] [%(levelname)-7.7s]\t%(message)s"
     )
     root_logger = logging.getLogger()

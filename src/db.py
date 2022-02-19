@@ -64,6 +64,7 @@ class TaskShufflerDB:
         cur = self.conn.cursor()
 
         # Make sure the subject exists
+        # TODO: rewrite with upserts
         subject_exists_query = ("SELECT s.subject_id "
                                 "FROM public.subjects s "
                                 "WHERE s.name = %(subject_name)s;")
@@ -75,7 +76,6 @@ class TaskShufflerDB:
                                     "RETURNING subject_id;")
             cur.execute(insert_subject_query, {"subject_name": df_row.subject})
             subject_id = cur.fetchone()[0]
-            self.conn.commit()
         else:
             subject_id = subject_exists_ans[0]
 
@@ -92,7 +92,6 @@ class TaskShufflerDB:
             cur.execute(insert_topic_query, {"topic_name": df_row.topic,
                                              "topic_path": df_row.topic_path})
             topic_id = cur.fetchone()[0]
-            self.conn.commit()
         else:
             topic_id = topic_exists_ans[0]
 
@@ -106,14 +105,16 @@ class TaskShufflerDB:
 
         # Create task
         insert_task_query = ("INSERT INTO public.tasks "
-                             "(task_tex, difficulty, filetype) VALUES "
-                             "(%(task_tex)s, %(difficulty)s, %(filetype)s) "
+                             "(task_tex, difficulty, numerical_answer) VALUES "
+                             "(%(task_tex)s, %(difficulty)s, %(numerical_answer)s) "
+                             "ON CONFLICT (task_tex) DO UPDATE "
+                             "SET difficulty = excluded.difficulty,"
+                             "    numerical_answer = excluded.numerical_answer "
                              "RETURNING task_id;")
         cur.execute(insert_task_query, {"task_tex": df_row.tex,
                                         "difficulty": df_row.difficulty,
-                                        "filetype": df_row.filetype})
+                                        "numerical_answer": df_row.numerical_answer})
         task_id = cur.fetchone()[0]
-        self.conn.commit()
 
         # Associate task with the topic
         upsert_topic_task_query = ("INSERT INTO public.topic_task "
@@ -122,11 +123,24 @@ class TaskShufflerDB:
                                    "ON CONFLICT DO NOTHING; ")
         cur.execute(upsert_topic_task_query, {"topic_id": topic_id,
                                               "task_id": task_id})
+
+        # Add solution file
+        insert_solution_query = ("INSERT INTO public.solutions"
+                                 "(solution_filetype, task_id) VALUES "
+                                 "(%(solution_filetype)s, %(task_id)s) "
+                                 "RETURNING solution_id;")
+        cur.execute(
+            insert_solution_query,
+            {"solution_filetype": df_row.solution_filetype,
+             "task_id": task_id}
+        )
+        solution_id = cur.fetchone()[0]
+
         self.conn.commit()
         cur.close()
         logging.debug(f"New task @{task_id=} about {df_row.topic} in the "
-                      f"{df_row.subject} subject.")
-        return task_id
+                      f"{df_row.subject} subject ({solution_id=}).")
+        return solution_id
 
     def get_subjects(self, filters: pd.Series) -> pd.DataFrame:
         filter_query = combine_filters(filters)
