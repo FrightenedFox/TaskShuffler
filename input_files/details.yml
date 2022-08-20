@@ -1,0 +1,57 @@
+tasks:
+  - path: "solutions/sol_1.png"
+    difficulty: 2
+    tex: "\\int{3x^2dx}"
+    tags:
+      - math
+      - integral
+
+  - path: "solutions/sol_2.png"
+    difficulty: 4
+    tex: "\\int{3x^2 - 2\\theta dx}"
+    tags:
+      - integral
+      - theta
+
+  - path: "solutions/sol_3.png"
+    difficulty: 1
+    tex: "\\int{3x^2+10x\\alpha dx}"
+    tags:
+      - integral
+      - math
+      - alpha
+
+  - path: "solutions/sol_4.png"
+    difficulty: 5
+    tex: "\\int{\\sin(2x) + 4x^2dx}"
+    tags:
+      - sin
+      - integral
+
+  - path: "solutions/sol_5.png"
+    difficulty: 3
+    tex: "\\int{e^x + 3x^2dx}"
+    tags:
+      - exponent
+      - integral
+
+  - path: "solutions/sol_6.png"
+    difficulty: 1
+    tex: "\\int{\\frac{3x^2}{2x^6}dx}"
+    tags:
+      - math
+      - division
+
+
+topics:
+  - topic: university
+    tags:
+      - math
+      - integral
+      - sin
+      - division
+  - topic: letters
+    tags:
+      - alpha
+      - theta
+      - exponent
